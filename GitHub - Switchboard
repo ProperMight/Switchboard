@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+
+import RPi.GPIO as GPIO
+from time import sleep
+import requests
+import time
+import json
+import re
+
+
+# Create a function to cycle through all the LEDs one by one.
+def ledcycle():
+	# Define which pins have LEDs attached to them.
+    leds = [7, 11, 12, 13, 15, 16, 18, 22, 29, 31, 32, 31, 29, 22, 18, 16, 15, 13, 12, 11, 7]
+	# Disable "GPIO pin in use" warning.
+    GPIO.setwarnings(False)
+	# Pins are being referenced by the number of the pin, and not the "Broadcom SOC channel" number (GPIO.BCM).
+    GPIO.setmode(GPIO.BOARD)
+	# Set the selected pins as output.
+    GPIO.setup(leds, GPIO.OUT)
+	# Cycle through each LED and turn it on and off again.
+    for led in leds:
+	GPIO.output(led, GPIO.HIGH)
+	time.sleep(0.1)
+	GPIO.output(led, GPIO.LOW)
+
+# Create a function to blink all the LEDs three times.
+def ledblink():
+	# Define which pins have LEDs attached to them.
+    leds = [7, 11, 12, 13, 15, 16, 18, 22, 29, 31, 32]
+	# Disable "GPIO pin in use" warning.
+    GPIO.setwarnings(False)
+	# Pins are being referenced by the number of the pin.
+    GPIO.setmode(GPIO.BOARD)
+	# Set the selected pins as output.
+    GPIO.setup(leds, GPIO.OUT)
+	# Turn all LEDs on and off three times.
+    for x in range(3):
+        GPIO.output(leds, GPIO.HIGH)
+        sleep(0.2)
+        GPIO.output(leds, GPIO.LOW)
+        sleep(0.2)
+
+# Check the status and uptime for each device in LibreNMS.
+def checks():
+	# Define which LED is attached to which GPIO pin.
+    LED_1_drift = 7
+    LED_2_fejl = 11
+    LED_3_alarm = 12
+    LED_4_fejl = 13
+    LED_5_alarm = 15
+    LED_6_fejl = 16
+    LED_7_alarm = 18
+    LED_8_fejl = 22
+    LED_9_alarm = 29
+    LED_10_fejl = 31
+    LED_11_alarm = 32
+
+	# Disable "GPIO pin in use" warning.
+    GPIO.setwarnings(False)
+	# Pins are being referenced by the number of the pin.
+    GPIO.setmode(GPIO.BOARD)
+
+	# Set the initial GPIO to low (off) for all LEDs.
+    led_alarmer = [LED_1_drift, LED_2_fejl, LED_3_alarm, LED_4_fejl, LED_5_alarm, LED_6_fejl, LED_7_alarm, LED_8_fejl, LED_9_alarm, LED_10_fejl, LED_11_alarm]
+    GPIO.setup(led_alarmer, GPIO.OUT, initial=GPIO.LOW)
+
+	# Import all active (not ignored and not disabled) devices from LibreNMS.
+    headers = {
+ 	    'X-Auth-Token': 'hmsudc8rnwr1phx9dwvrbmybc0lwsgsy',
+    }
+    librenms_poll = requests.get('https://librenms.org/api/v0/devices?type=active', headers = headers)
+
+	# Create an array for each location to be filled with devices.
+    ONE_devices = []
+    TWO_devices = []
+    THREE_devices = []
+    FOUR_devices = []
+    FIVE_devices = []
+
+    devices = librenms_poll.json()
+
+	# Cycle through all devices and sort them by their hostname.
+    for item in devices['devices']:
+	if re.match('.*-ONE-.*', item['hostname']):
+ 	    ONE_devices.append(item)
+	elif re.match('.*-TWO-.*', item['hostname']):
+            TWO_devices.append(item)
+	elif re.match('.*-THREE-.*', item['hostname']):
+            THREE_devices.append(item)
+	elif re.match('.*-FOUR.*', item['hostname']):
+            THREE_devices.append(item)
+	else:
+	    FIVE_devices.append(item)
+
+
+    # ONE
+    LED_3_alarm_bit = 0
+	# Cycle through each device in the ONE_devices array and check if their status = 0.
+    for item in ONE_devices:
+	# If the status of even one device is 0, the value of the LED_3_alarm_bit is changed to 1.
+	if item['status'] == 0:
+	    LED_3_alarm_bit = 1
+
+    if LED_3_alarm_bit == 1:
+	# If a device is down, change the corresponding LED to on.
+	GPIO.output(LED_3_alarm, GPIO.HIGH)
+	# Disable the "LED_1_drift" LED.
+	GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+	# If no devices are down, turn off the LED_3_alarm LED.
+	GPIO.output(LED_3_alarm, GPIO.LOW)
+
+    LED_2_fejl_bit = 0
+	# Cycle through each device in the ONE_devices array and check if any of them has an uptime of less than 24 hours.
+    for item in ONE_devices:
+	# If a device has an uptime of less than 24 hours, change the value of the LED_2_fejl_bit to 1.
+	if item['uptime'] < 86400:
+	    LED_2_fejl_bit = 1
+
+    if LED_2_fejl_bit == 1:
+	# If a device has been restarted within the last 24 hours, change the corresponding LED to on.
+	GPIO.output(LED_2_fejl, GPIO.HIGH)
+	# Disable the "LED_1_drift" LED.
+	GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+	# If no devices have been restarted, turn off the LED_2_fejl LED.
+	GPIO.output(LED_2_fejl, GPIO.LOW)
+	
+	
+    # TWO
+    LED_5_alarm_bit = 0
+    for item in TWO_devices:
+        if item['status'] == 0:
+            LED_5_alarm_bit = 1
+
+    if LED_5_alarm_bit == 1:
+        GPIO.output(LED_5_alarm, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_5_alarm, GPIO.LOW)
+
+    LED_4_fejl_bit = 0
+    for item in TWO_devices:
+        if item['uptime'] < 86400:
+            LED_4_fejl_bit = 1
+
+    if LED_4_fejl_bit == 1:
+        GPIO.output(LED_4_fejl, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_4_fejl, GPIO.LOW)
+	
+	
+    # THREE
+        LED_7_alarm_bit = 0
+    for item in THREE_devices:
+        if item['status'] == 0:
+            LED_7_alarm_bit = 1
+
+    if LED_7_alarm_bit == 1:
+        GPIO.output(LED_7_alarm, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_7_alarm, GPIO.LOW)
+
+    LED_6_fejl_bit = 0
+    for item in THREE_devices:
+        if item['uptime'] < 86400:
+            LED_6_fejl_bit = 1
+
+    if LED_6_fejl_bit == 1:
+        GPIO.output(LED_6_fejl, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_6_fejl, GPIO.LOW)
+	
+	
+    # FOUR
+    LED_9_alarm_bit = 0
+    for item in FOUR_devices:
+        if item['status'] == 0:
+            LED_9_alarm_bit = 1
+
+    if LED_9_alarm_bit == 1:
+        GPIO.output(LED_9_alarm, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_9_alarm, GPIO.LOW)
+
+    LED_8_fejl_bit = 0
+    for item in FOUR_devices:
+        if item['uptime'] < 86400:
+            LED_8_fejl_bit = 1
+
+    if LED_8_fejl_bit == 1:
+        GPIO.output(LED_8_fejl, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_8_fejl, GPIO.LOW)
+	
+	
+    # FIVE
+    LED_11_alarm_bit = 0
+    for item in FIVE_devices:
+        if item['status'] == 0:
+            LED_11_alarm_bit = 1
+
+    if LED_11_alarm_bit == 1:
+        GPIO.output(LED_11_alarm, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_11_alarm, GPIO.LOW)
+
+    LED_10_fejl_bit = 0
+    for item in FIVE_devices:
+        if item['uptime'] < 86400:
+            LED_10_fejl_bit = 1
+
+    if LED_10_fejl_bit == 1:
+        GPIO.output(LED_10_fejl, GPIO.HIGH)
+        GPIO.output(LED_1_drift, GPIO.LOW)
+    else:
+        GPIO.output(LED_10_fejl, GPIO.LOW)
+
+    # DRIFT
+	# If no errors have been detected, turn on the "LED_1_drift" LED.
+    if LED_2_fejl_bit + LED_3_alarm_bit + LED_4_fejl_bit + LED_5_alarm_bit + LED_6_fejl_bit + LED_7_alarm_bit + LED_8_fejl_bit + LED_9_alarm_bit + LED_10_fejl_bit + LED_11_alarm_bit == 0:
+	    GPIO.output(LED_1_drift, GPIO.HIGH)
+
+
+# Run the ledblink() and ledcycle() functions only once every time the Raspberry Pi is rebooted.        
+i = 0
+while True:
+    if i == 0:
+        ledblink()
+        ledcycle()
+        i += 1
+    if i == 1:
+        checks()
+        sleep(60)
+
+GPIO.cleanup
